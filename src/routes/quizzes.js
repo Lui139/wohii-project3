@@ -1,83 +1,120 @@
 const express = require("express");
 const router = express.Router();
+const prisma = require("../lib/prisma");
 
-const quizzes = require("../data/quizzes");
+
+function formatQuiz(quiz) {
+    return {
+        ...quiz,
+        //date: quiz.date.toISOString().split("T")[0],
+        keywords: quiz.keywords.map((k) => k.name),
+    };
+}
 
 // GET /api/quizzes/,/api/quizzes?keyword=Finland
 // List all quizzes
-router.get("/", (req, res) => {
+router.get("/", async(req, res) => {
     const { keyword } = req.query;
-    if (!keyword) {
-        return res.json(quizzes);
-    }
-    const filteredQuizzes = quizzes.filter(p=>p.keywords.includes(keyword));
-    res.json(filteredQuizzes);
+
+    const where = keyword ? 
+    { keywords: { some: { name: keyword } } } : {};
+
+    const filteredQuizzes = await prisma.quiz.findMany({
+        where,
+        include: { keywords: true },
+        orderBy: { id: "asc" },
+    });
+
+    res.json(filteredQuizzes.map(formatQuiz));
 });
+
 // GET /api/quizzes/:quizId
 // Show a specific quiz
-router.get("/:quizId", (req, res) => {
+router.get("/:quizId", async (req, res) => {
     const quizId = Number(req.params.quizId);
-    const quiz = quizzes.find(p=> p.id === quizId);
+    const quiz = await prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: { keywords: true },
+    });
+
     if (!quiz) {
         return res.status(404).json({ message: "Quiz not found" });
     }
-    res.json(quiz);
+    res.json(formatQuiz(quiz));
 });
-
 // POST /api/quizzes
 // Create a new quiz
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
     const {question, answer, keywords} = req.body;
+
     if (!question || !answer) {
         return res.status(400).json({msg: "question and answer are required"})
     }
-    const existingIds = quizzes.map(p=>p.id) // [1,2,3,4]
-    const maxId = Math.max(...existingIds)
-    const newQuiz = {
-        id: quizzes.length ? maxId + 1 : 1,
-        question, answer,
-        keywords: Array.isArray(keywords) ? keywords : []
-    }
-    quizzes.push(newQuiz);
-    res.status(201).json(newQuiz);
-});
+    
+    const keywordsArray = Array.isArray(keywords) ? keywords : [];
+    
+    const newQuiz = await prisma.quiz.create({
+        data: {
+            question, answer,
+            keywords: {
+                connectOrCreate: keywordsArray.map((kw) => ({
+                where: { name: kw }, create: { name: kw },
+            })), },
+        },
+        include: { keywords: true },   
+    });
 
+    res.status(201).json(formatQuiz(newQuiz));
+});
 // PUT /api/quizzes/:quizId
 // Edit a quiz
-router.put("/:quizId", (req, res) => {
+router.put("/:quizId", async (req, res) => {
     const quizId = Number(req.params.quizId);
-    const quiz = quizzes.find(p=> p.id === quizId);
+    const { question, answer, keywords } = req.body;
+    
+    const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
+
     if (!quiz) {
         return res.status(404).json({ message: "Quiz not found" });
     }
-
-    const {question, answer, keywords} = req.body;
     if (!question || !answer) {
         return res.status(400).json({msg: "question and answer are required"})
     }
-    quiz.question = question;
-    quiz.answer = answer;
-    quiz.keywords = Array.isArray(keywords) ? keywords : [];
-
-    res.json(quiz); 
+    const keywordsArray = Array.isArray(keywords) ? keywords : [];
+    const updatedQuiz = await prisma.quiz.update({
+        where: { id: quizId },
+        data: {
+            question, answer,
+            keywords: {
+                set: [],
+                connectOrCreate: keywordsArray.map((kw) => ({
+                    where: { name: kw },
+                    create: { name: kw },
+                })),
+            },
+        },
+        include: { keywords: true },
+    });
+    res.json(formatQuiz(updatedQuiz));
 });
 
 // DELETE /api/quizzes/:quizId
 // Delete a quiz
-router.delete("/:quizId", (req, res) => {
+router.delete("/:quizId", async (req, res) => {
     const quizId = Number(req.params.quizId);
-    const quizIndex = quizzes.findIndex(p=> p.id === quizId);
-
-    if (quizIndex === -1) {
+    const quiz = await prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: { keywords: true },
+    });
+    if (!quiz) {
         return res.status(404).json({ msg: "Quiz not found" });
     }
-    const deletedQuiz = quizzes.splice(quizIndex, 1);
+    await prisma.quiz.delete({ where: { id: quizId } });
+
     res.json({
-        mesg: "Quizt deleted successfully",
-        quiz: deletedQuiz
+        mesg: "Quiz deleted successfully",
+        quiz: formatQuiz(quiz),
     });
 });
-
-
 
 module.exports = router;
