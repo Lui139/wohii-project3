@@ -1,0 +1,23 @@
+info:
+  name: Edit a quiz
+  type: http
+  seq: 1
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/999"
+  body:
+    type: json
+    data: |-
+      {
+        "question":"What is the capital of India?",
+        "answer": "New Delhi",
+        "keywords": ["country", "capital", "India"]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

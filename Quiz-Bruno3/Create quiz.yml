@@ -1,0 +1,23 @@
+info:
+  name: Create quiz
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}"
+  body:
+    type: json
+    data: |-
+      {
+        "question":"What is the capital of Iceland?",
+        "answer": "Reykjavik",
+        "keywords": ["country", "capital", "Iceland"]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
